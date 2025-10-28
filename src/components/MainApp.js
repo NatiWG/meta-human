@@ -1,75 +1,9 @@
-im
-
-  const removeCalendarEvent = (eventIndex) => {
-    setCalendarEvents(prev => {
-      const key = `${currentWeek}-${currentDay}`;
-      const events = prev[key] || [];
-      const newEvents = { ...prev };
-      newEvents[key] = events.filter((_, i) => i !== eventIndex);
-      return newEvents;
-    });
-  };
-
-  const adjustScheduleForEvents = (events) => {
-    const adjustments = [];
-    const tasks = schedule[currentDay];
-    
-    events.forEach(evt => {
-      const eStart = evt.startHour * 60 + evt.startMin;
-      const eEnd = evt.endHour * 60 + evt.endMin;
-      
-      tasks.forEach((task, idx) => {
-        const match = task.time.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
-        if (!match) return;
-        
-        const tsh = parseInt(match[1]);
-        const tsm = parseInt(match[2]);
-        const teh = parseInt(match[3]);
-        const tem = parseInt(match[4]);
-        
-        const tStart = tsh * 60 + tsm;
-        const tEnd = teh * 60 + tem;
-        
-        if (tStart < eEnd && tEnd > eStart) {
-          const key = `week${currentWeek}-${currentDay}-adjust-${idx}`;
-          
-          if (tStart < eStart) {
-            const newEnd = eStart;
-            const newEndHour = Math.floor(newEnd / 60);
-            const newEndMin = newEnd % 60;
-            const newTime = `${tsh}:${String(tsm).padStart(2,'0')}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
-            
-            adjustments.push({ taskIdx: idx, taskName: task.task, reason: `Acortado por ${evt.title}` });
-            setTaskAdjustments(prev => ({ ...prev, [key]: { originalTime: task.time, newTime, adjusted: true } }));
-          } else {
-            const newStart = eEnd;
-            const duration = tEnd - tStart;
-            const newEnd = newStart + duration;
-            const newStartHour = Math.floor(newStart / 60);
-            const newStartMin = newStart % 60;
-            const newEndHour = Math.floor(newEnd / 60);
-            const newEndMin = newEnd % 60;
-            const newTime = `${newStartHour}:${String(newStartMin).padStart(2,'0')}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
-            
-            adjustments.push({ taskIdx: idx, taskName: task.task, reason: `Movido después de ${evt.title}` });
-            setTaskAdjustments(prev => ({ ...prev, [key]: { originalTime: task.time, newTime, adjusted: true } }));
-          }
-        }
-      });
-    });
-    
-    if (adjustments.length > 0) {
-      console.log('Ajustes realizados:', adjustments);
-    }
-  };
 import React, { useState, useEffect } from 'react';
 import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, Sparkles, LogOut, X, AlertCircle } from 'lucide-react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 function MainApp({ user, onLogout }) {
-
-
   // Estados principales
   const [currentDay, setCurrentDay] = useState('lunes');
   const [completedTasks, setCompletedTasks] = useState({});
@@ -92,6 +26,7 @@ function MainApp({ user, onLogout }) {
   const [dataLoaded, setDataLoaded] = useState(false);
 
   const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+  const getWeekDayKey = (day, dataKey) => `week${currentWeek}-${day}-${dataKey}`;
   // FIREBASE SYNC
   useEffect(() => {
     if (!user) return;
@@ -143,7 +78,54 @@ function MainApp({ user, onLogout }) {
     return () => clearTimeout(timer);
   }, [user, dataLoaded, currentDay, completedTasks, dailyReflections, applicationCount, contacts, currentWeek, calendarEvents, taskAdjustments, skippedTasks, movedTasks]);
 
-  const getWeekDayKey = (day, dataKey) => `week${currentWeek}-${day}-${dataKey}`;
+  const removeCalendarEvent = (eventIndex) => {
+    setCalendarEvents(prev => {
+      const key = `${currentWeek}-${currentDay}`;
+      const events = prev[key] || [];
+      const newEvents = { ...prev };
+      newEvents[key] = events.filter((_, i) => i !== eventIndex);
+      return newEvents;
+    });
+  };
+
+  const adjustScheduleForEvents = (events) => {
+    const tasks = schedule[currentDay];
+    events.forEach(evt => {
+      const eStart = evt.startHour * 60 + evt.startMin;
+      const eEnd = evt.endHour * 60 + evt.endMin;
+      tasks.forEach((task, idx) => {
+        const match = task.time.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+        if (!match) return;
+        const tsh = parseInt(match[1]);
+        const tsm = parseInt(match[2]);
+        const teh = parseInt(match[3]);
+        const tem = parseInt(match[4]);
+        const tStart = tsh * 60 + tsm;
+        const tEnd = teh * 60 + tem;
+        if (tStart < eEnd && tEnd > eStart) {
+          const key = `week${currentWeek}-${currentDay}-adjust-${idx}`;
+          if (tStart < eStart) {
+            const newEnd = eStart;
+            const newEndHour = Math.floor(newEnd / 60);
+            const newEndMin = newEnd % 60;
+            const newTime = `${tsh}:${String(tsm).padStart(2,'0')}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
+            setTaskAdjustments(prev => ({ ...prev, [key]: { originalTime: task.time, newTime, adjusted: true } }));
+          } else {
+            const newStart = eEnd;
+            const duration = tEnd - tStart;
+            const newEnd = newStart + duration;
+            const newStartHour = Math.floor(newStart / 60);
+            const newStartMin = newStart % 60;
+            const newEndHour = Math.floor(newEnd / 60);
+            const newEndMin = newEnd % 60;
+            const newTime = `${newStartHour}:${String(newStartMin).padStart(2,'0')}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
+            setTaskAdjustments(prev => ({ ...prev, [key]: { originalTime: task.time, newTime, adjusted: true } }));
+          }
+        }
+      });
+    });
+  };
+
 
   // 84 PREGUNTAS FILOSÓFICAS COMPLETAS (12 SEMANAS × 7 DÍAS)
   const reflectionPrompts = {
