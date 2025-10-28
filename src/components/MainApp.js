@@ -943,65 +943,6 @@ function MainApp({ user, onLogout }) {
     });
   };
 
-  const moveTaskToNextDay = (taskIndex) => {
-    const currentDayIndex = days.indexOf(currentDay);
-    if (currentDayIndex < days.length - 1) {
-      const nextDay = days[currentDayIndex + 1];
-      const task = schedule[currentDay][taskIndex];
-      
-      setMovedTasks(prev => ({
-        ...prev,
-        [nextDay]: [...(prev[nextDay] || []), { ...task, movedFrom: currentDay }]
-      }));
-      
-      setSkippedTasks(prev => ({
-        ...prev,
-        [`${currentDay}-${taskIndex}`]: true
-      }));
-    }
-  };
-
-  const undoMove = (movedTaskIndex) => {
-    const movedTasksList = movedTasks[currentDay] || [];
-    const movedTask = movedTasksList[movedTaskIndex];
-    
-    if (movedTask && movedTask.movedFrom) {
-      const originalDay = movedTask.movedFrom;
-      
-      setMovedTasks(prev => ({
-        ...prev,
-        [currentDay]: prev[currentDay].filter((_, idx) => idx !== movedTaskIndex)
-      }));
-      
-      const originalSchedule = schedule[originalDay];
-      const originalTaskIndex = originalSchedule.findIndex(t => 
-        t.time === movedTask.time && t.task === movedTask.task
-      );
-      
-      if (originalTaskIndex !== -1) {
-        setSkippedTasks(prev => {
-          const newSkipped = { ...prev };
-          delete newSkipped[`${originalDay}-${originalTaskIndex}`];
-          return newSkipped;
-        });
-      }
-    }
-  };
-
-  const skipTask = (taskIndex) => {
-    setSkippedTasks(prev => ({
-      ...prev,
-      [`${currentDay}-${taskIndex}`]: true
-    }));
-  };
-
-  const undoSkip = (taskIndex) => {
-    setSkippedTasks(prev => {
-      const newSkipped = { ...prev };
-      delete newSkipped[`${currentDay}-${taskIndex}`];
-      return newSkipped;
-    });
-  };
 
   const toggleTaskControls = (taskIndex) => {
     setExpandedTaskControls(prev => ({
