@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, Sparkles, LogOut } from 'lucide-react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from './firebase';
 
 function MainApp({ user, onLogout }) {
   // Estados principales
