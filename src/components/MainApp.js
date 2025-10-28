@@ -93,7 +93,7 @@ function MainApp({ user, onLogout }) {
     const key = getWeekDayKey(currentDay, `adjust-${taskIdx}`);
     const adj = taskAdjustments[key];
     const time = adj?.newTime || task.time;
-    const match = time.match(/(\\d{1,2}):(\\d{2})-(\\d{1,2}):(\\d{2})/);
+    const match = time.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
     if (!match) return;
     const [_, sh, sm, eh, em] = match.map((v, i) => i > 0 ? parseInt(v) : v);
     const dur = (eh - sh) * 60 + (em - sm);
@@ -149,7 +149,7 @@ function MainApp({ user, onLogout }) {
       const eStart = evt.startHour * 60 + evt.startMin;
       const eEnd = evt.endHour * 60 + evt.endMin;
       tasks.forEach((task, idx) => {
-        const match = task.time.match(/(\\d{1,2}):(\\d{2})-(\\d{1,2}):(\\d{2})/);
+        const match = task.time.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
         if (!match) return;
         const [_, tsh, tsm, teh, tem] = match.map((v, i) => i > 0 ? parseInt(v) : v);
         const tStart = tsh * 60 + tsm;
@@ -168,10 +168,10 @@ function MainApp({ user, onLogout }) {
 
   const parseCalendar = () => {
     if (!calText.trim()) return;
-    const lines = calText.trim().split('\\n');
+    const lines = calText.trim().split('\n');
     const events = [];
     lines.forEach(line => {
-      const m = line.match(/(.+?)\\s+(\\d{1,2}):(\\d{2})\\s*-\\s*(\\d{1,2}):(\\d{2})/i);
+      const m = line.match(/(.+?)\s+(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/i);
       if (m) events.push({ title: m[1].trim(), startHour: parseInt(m[2]), startMin: parseInt(m[3]), endHour: parseInt(m[4]), endMin: parseInt(m[5]) });
     });
     const key = getWeekDayKey(currentDay, 'calendar');
@@ -211,18 +211,18 @@ function MainApp({ user, onLogout }) {
     days.forEach(d => {
       const apps = applicationCount[getWeekDayKey(d, 'apps')];
       const conts = contacts[getWeekDayKey(d, 'contacts')];
-      if (apps) totalApps += apps.split('\\n').filter(l => l.trim()).length;
-      if (conts) totalContacts += conts.split('\\n').filter(l => l.trim()).length;
+      if (apps) totalApps += apps.split('\n').filter(l => l.trim()).length;
+      if (conts) totalContacts += conts.split('\n').filter(l => l.trim()).length;
     });
     return { totalApps, totalContacts };
   };
 
   const exportData = () => {
-    let csv = "data:text/csv;charset=utf-8,POSTULACIONES\\nSemana,Día,Postulación\\n";
+    let csv = "data:text/csv;charset=utf-8,POSTULACIONES\nSemana,Día,Postulación\n";
     Object.entries(applicationCount).forEach(([key, apps]) => {
       if (apps?.trim()) apps.split('\\n').filter(l => l.trim()).forEach(app => { csv += `"${key}","${app}"\\n`; });
     });
-    csv += "\\n\\nCONTACTOS\\nSemana,Día,Contacto\\n";
+    csv += "\n\nCONTACTOS\nSemana,Día,Contacto\n";
     Object.entries(contacts).forEach(([key, conts]) => {
       if (conts?.trim()) conts.split('\\n').filter(l => l.trim()).forEach(cont => { csv += `"${key}","${cont}"\\n`; });
     });
@@ -303,11 +303,31 @@ function MainApp({ user, onLogout }) {
     calendario: 'bg-orange-100 text-orange-800'
   };
 
+
+  const getTasksMovedToDay = (day) => {
+    const movedToThisDay = [];
+    Object.entries(movedTasks).forEach(([key, moveData]) => {
+      if (moveData.toDay === day) {
+        const fromDaySchedule = schedule[moveData.fromDay];
+        if (fromDaySchedule && fromDaySchedule[moveData.taskIdx]) {
+          movedToThisDay.push({
+            ...fromDaySchedule[moveData.taskIdx],
+            movedFrom: moveData.fromDay,
+            moveKey: key,
+            originalIdx: moveData.taskIdx
+          });
+        }
+      }
+    });
+    return movedToThisDay;
+  };
+
   const wp = weekProg();
   const weekStats = getWeekStats();
   const q = reflectionPrompts[currentDay];
   const calKey = getWeekDayKey(currentDay, 'calendar');
   const dayEvents = calendarEvents[calKey] || [];
+  const movedToToday = getTasksMovedToDay(currentDay);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 p-4">
@@ -374,9 +394,15 @@ function MainApp({ user, onLogout }) {
             </div>
           </div>
 
-          <button onClick={exportData} className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-semibold">
+          <div className="grid grid-cols-2 gap-4">
+            <button onClick={exportData} className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-semibold">
             📥 Exportar Datos
           </button>
+            <button onClick={() => setShowAllData(!showAllData)} className="w-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white py-3 rounded-xl font-semibold flex items-center justify-center gap-2">
+              <BookOpen className="w-5 h-5" />
+              {showAllData ? 'Ocultar' : 'Ver Todos'} los Datos
+            </button>
+          </div>
         </div>
 
         {/* Calendario */}
@@ -420,6 +446,29 @@ function MainApp({ user, onLogout }) {
             </div>
           </div>
         )}
+
+        {/* Desafío IA */}
+        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200 rounded-2xl p-6 mb-6">
+          <button onClick={() => setShowAIChallenge(!showAIChallenge)} className="w-full flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              Desafío IA Semanal
+            </h3>
+            {showAIChallenge ? <ChevronUp /> : <ChevronDown />}
+          </button>
+          {showAIChallenge && aiChallenges[0] && (
+            <>
+              <h4 className="font-bold mb-2">{aiChallenges[0].title}</h4>
+              <p className="text-sm mb-3">Objetivo: {aiChallenges[0].objective}</p>
+              <ul className="space-y-2">
+                {aiChallenges[0].steps.map((step, i) => (
+                  <li key={i} className="text-sm">✓ {step}</li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+
 
         {/* Days */}
         <div className="bg-white rounded-2xl shadow-lg p-4 mb-6">
@@ -484,27 +533,44 @@ function MainApp({ user, onLogout }) {
           )}
         </div>
 
-        {/* Desafío IA */}
-        <div className="bg-gradient-to-r from-cyan-50 to-blue-50 border-2 border-cyan-200 rounded-2xl p-6 mb-6">
-          <button onClick={() => setShowAIChallenge(!showAIChallenge)} className="w-full flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg flex items-center gap-2">
-              <Sparkles className="w-5 h-5" />
-              Desafío IA Semanal
-            </h3>
-            {showAIChallenge ? <ChevronUp /> : <ChevronDown />}
+        {/* Ver todos los datos */}
+        <div className="bg-white rounded-2xl shadow-lg p-6 mt-6">
+          <button onClick={() => setShowAllData(!showAllData)} className="w-full flex items-center justify-between mb-4">
+            <h3 className="font-bold text-lg">📊 Ver Todos los Datos</h3>
+            {showAllData ? <ChevronUp /> : <ChevronDown />}
           </button>
-          {showAIChallenge && aiChallenges[0] && (
-            <>
-              <h4 className="font-bold mb-2">{aiChallenges[0].title}</h4>
-              <p className="text-sm mb-3">Objetivo: {aiChallenges[0].objective}</p>
-              <ul className="space-y-2">
-                {aiChallenges[0].steps.map((step, i) => (
-                  <li key={i} className="text-sm">✓ {step}</li>
-                ))}
-              </ul>
-            </>
+          {showAllData && (
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-bold mb-2">Postulaciones por día:</h4>
+                {days.map(d => {
+                  const apps = applicationCount[getWeekDayKey(d, 'apps')];
+                  if (!apps) return null;
+                  return (
+                    <div key={d} className="mb-2">
+                      <p className="font-semibold capitalize">{d}:</p>
+                      <p className="text-sm whitespace-pre-wrap">{apps}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div>
+                <h4 className="font-bold mb-2">Contactos por día:</h4>
+                {days.map(d => {
+                  const conts = contacts[getWeekDayKey(d, 'contacts')];
+                  if (!conts) return null;
+                  return (
+                    <div key={d} className="mb-2">
+                      <p className="font-semibold capitalize">{d}:</p>
+                      <p className="text-sm whitespace-pre-wrap">{conts}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
         </div>
+
 
         {/* Schedule */}
         <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -532,7 +598,32 @@ function MainApp({ user, onLogout }) {
               </div>
             ))}
             
-            {/* Tareas del día */}
+
+            
+            {/* Tareas movidas desde otros días */}
+            {movedToToday.map((movedTask, i) => (
+              <div key={`moved-${i}`} className={`border-2 rounded-xl p-4 ${colors[movedTask.cat]} ring-2 ring-blue-400`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Clock className="w-4 h-4" />
+                      <span className="text-sm font-semibold">{movedTask.time}</span>
+                      <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded-full">📤 Desde {movedTask.movedFrom}</span>
+                    </div>
+                    <p className="font-medium">{movedTask.task}</p>
+                  </div>
+                  <button 
+                    onClick={() => returnMovedTask(movedTask.originalIdx, movedTask.movedFrom)} 
+                    className="ml-2 p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"
+                    title="Devolver a día original"
+                  >
+                    <Clock className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+                        {/* Tareas del día */}
             {schedule[currentDay].map((item, i) => {
               const taskKey = getWeekDayKey(currentDay, `task-${i}`);
               const adjustKey = getWeekDayKey(currentDay, `adjust-${i}`);
@@ -601,44 +692,6 @@ function MainApp({ user, onLogout }) {
               );
             })}
           </div>
-        </div>
-
-        {/* Ver todos los datos */}
-        <div className="bg-white rounded-2xl shadow-lg p-6 mt-6">
-          <button onClick={() => setShowAllData(!showAllData)} className="w-full flex items-center justify-between mb-4">
-            <h3 className="font-bold text-lg">📊 Ver Todos los Datos</h3>
-            {showAllData ? <ChevronUp /> : <ChevronDown />}
-          </button>
-          {showAllData && (
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-bold mb-2">Postulaciones por día:</h4>
-                {days.map(d => {
-                  const apps = applicationCount[getWeekDayKey(d, 'apps')];
-                  if (!apps) return null;
-                  return (
-                    <div key={d} className="mb-2">
-                      <p className="font-semibold capitalize">{d}:</p>
-                      <p className="text-sm whitespace-pre-wrap">{apps}</p>
-                    </div>
-                  );
-                })}
-              </div>
-              <div>
-                <h4 className="font-bold mb-2">Contactos por día:</h4>
-                {days.map(d => {
-                  const conts = contacts[getWeekDayKey(d, 'contacts')];
-                  if (!conts) return null;
-                  return (
-                    <div key={d} className="mb-2">
-                      <p className="font-semibold capitalize">{d}:</p>
-                      <p className="text-sm whitespace-pre-wrap">{conts}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
       </div>
