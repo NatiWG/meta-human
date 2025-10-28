@@ -3,29 +3,20 @@ import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, 
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
-
 function MainApp({ user, onLogout }) {
-  // Función para cargar datos desde localStorage
-  const loadFromStorage = (key, defaultValue) => {
-    try {
-      const saved = localStorage.getItem(`meta_human_${key}`);
-      return saved ? JSON.parse(saved) : defaultValue;
-    } catch {
-      return defaultValue;
-    }
-  };
+
 
   // Estados principales
-  const [currentDay, setCurrentDay] = useState(() => loadFromStorage('currentDay', 'lunes'));
-  const [completedTasks, setCompletedTasks] = useState(() => loadFromStorage('completedTasks', {}));
-  const [dailyReflections, setDailyReflections] = useState(() => loadFromStorage('dailyReflections', {}));
-  const [applicationCount, setApplicationCount] = useState(() => loadFromStorage('applicationCount', {}));
-  const [contacts, setContacts] = useState(() => loadFromStorage('contacts', {}));
-  const [currentWeek, setCurrentWeek] = useState(() => loadFromStorage('currentWeek', 1));
-  const [calendarEvents, setCalendarEvents] = useState(() => loadFromStorage('calendarEvents', {}));
-  const [taskAdjustments, setTaskAdjustments] = useState(() => loadFromStorage('taskAdjustments', {}));
-  const [skippedTasks, setSkippedTasks] = useState(() => loadFromStorage('skippedTasks', {}));
-  const [movedTasks, setMovedTasks] = useState(() => loadFromStorage('movedTasks', {}));
+  const [currentDay, setCurrentDay] = useState('lunes');
+  const [completedTasks, setCompletedTasks] = useState({});
+  const [dailyReflections, setDailyReflections] = useState({});
+  const [applicationCount, setApplicationCount] = useState({});
+  const [contacts, setContacts] = useState({});
+  const [currentWeek, setCurrentWeek] = useState(1);
+  const [calendarEvents, setCalendarEvents] = useState({});
+  const [taskAdjustments, setTaskAdjustments] = useState({});
+  const [skippedTasks, setSkippedTasks] = useState({});
+  const [movedTasks, setMovedTasks] = useState({});
   
   // Estados de UI
   const [showReflection, setShowReflection] = useState(false);
@@ -37,15 +28,12 @@ function MainApp({ user, onLogout }) {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [scheduleAdjustments, setScheduleAdjustments] = useState([]);
 
+  const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
-  
   // Sistema de keys únicas por semana
   const getWeekDayKey = (day, dataKey) => {
     return `week${currentWeek}-${day}-${dataKey}`;
   };
-
-  const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
-
 
   // Cargar datos desde Firebase al iniciar
   useEffect(() => {
@@ -110,8 +98,31 @@ function MainApp({ user, onLogout }) {
     };
 
     const timeoutId = setTimeout(saveData, 1000);
-  
-  // NUEVAS FUNCIONES AGREGADAS
+    return () => clearTimeout(timeoutId);
+  }, [user, dataLoaded, currentDay, completedTasks, dailyReflections, applicationCount, contacts, currentWeek, calendarEvents, taskAdjustments, skippedTasks, movedTasks]);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  // FUNCIONES PARA GESTIÓN DE TAREAS Y CALENDARIO
 
   // Eliminar evento del calendario
   const removeCalendarEvent = (eventIndex) => {
@@ -253,7 +264,7 @@ function MainApp({ user, onLogout }) {
     return adjustments;
   };
 
-  // Agregar función de parsing de calendario mejorada
+  // Parsing de calendario mejorado con ajuste automático
   const parseCalendarEnhanced = () => {
     if (!calText.trim()) return;
     const lines = calText.trim().split('\n');
@@ -279,9 +290,6 @@ function MainApp({ user, onLogout }) {
     
     setCalText('');
   };
-
-  return () => clearTimeout(timeoutId);
-  }, [user, dataLoaded, currentDay, completedTasks, dailyReflections, applicationCount, contacts, currentWeek, calendarEvents, taskAdjustments, skippedTasks, movedTasks]);
 
 
   // 84 PREGUNTAS FILOSÓFICAS COMPLETAS (12 SEMANAS × 7 DÍAS)
@@ -876,7 +884,7 @@ function MainApp({ user, onLogout }) {
 
   const hasConflict = (taskTime) => {
     const timeMatch = taskTime.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
-    const dayEvents = calendarEvents[currentDay] || [];
+    const dayEvents = calendarEvents[getWeekDayKey(currentDay, 'calendar')] || [] || [];
     if (!timeMatch || dayEvents.length === 0) return false;
     
     const taskStart = parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
@@ -1003,7 +1011,7 @@ function MainApp({ user, onLogout }) {
   };
 
   const getAdjustedSchedule = () => {
-    const dayEvents = calendarEvents[currentDay] || [];
+    const dayEvents = calendarEvents[getWeekDayKey(currentDay, 'calendar')] || [] || [];
     const dayMovedTasks = movedTasks[currentDay] || [];
     
     const adjusted = [];
@@ -1138,9 +1146,21 @@ function MainApp({ user, onLogout }) {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Meta.human</h1>
-              <p className="text-gray-600">Mi plan de crecimiento y propósito</p>
+              <p className="text-gray-600">Hola, {user.email}</p>
             </div>
-            <Calendar className="w-12 h-12 text-purple-600" />
+            <div className="flex items-center gap-4">
+              <div className="text-right">
+                <p className="text-xs text-gray-500">{syncStatus}</p>
+                <p className="text-xs text-green-600">☁️ Firebase</p>
+              </div>
+              <button
+                onClick={onLogout}
+                className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all"
+              >
+                <LogOut className="w-4 h-4" />
+                Salir
+              </button>
+            </div>
           </div>
 
           <div className="bg-green-50 border-2 border-green-200 rounded-lg p-3 mb-4">
@@ -1163,7 +1183,7 @@ function MainApp({ user, onLogout }) {
           
           <div className="bg-purple-100 rounded-xl p-4 mb-4">
             <div className="flex justify-between mb-2">
-              <span className="text-sm font-semibold">Progreso Semanal</span>
+              <span className="text-sm font-semibold">Progreso Semanal {currentWeek}</span>
               <span className="text-sm font-bold text-purple-700">{weekProgress.percentage}%</span>
             </div>
             <div className="w-full bg-white rounded-full h-3">
@@ -1179,7 +1199,7 @@ function MainApp({ user, onLogout }) {
               <div className="flex items-center gap-3">
                 <Send className="w-6 h-6 text-blue-600" />
                 <div>
-                  <p className="text-sm">Postulaciones</p>
+                  <p className="text-sm">Postulaciones (Semana {currentWeek})</p>
                   <p className="text-2xl font-bold">
                     {Object.values(applicationCount).reduce((total, value) => {
                       return total + (value ? value.split('\n').filter(l => l.trim()).length : 0);
@@ -1366,8 +1386,8 @@ function MainApp({ user, onLogout }) {
                 💭 {currentPrompt.quote}
               </p>
               <textarea
-                value={dailyReflections[currentDay] || ''}
-                onChange={(e) => setDailyReflections(prev => ({...prev, [currentDay]: e.target.value}))}
+                value={dailyReflections[getWeekDayKey(currentDay, 'reflection')] || ''}
+                onChange={(e) => setDailyReflections(prev => ({...prev, [getWeekDayKey(currentDay, 'reflection')]: e.target.value}))}
                 className="w-full p-4 border-2 rounded-lg bg-amber-50 focus:border-amber-500 focus:outline-none"
                 rows="4"
                 placeholder="Escribe tu reflexión aquí..."
@@ -1381,8 +1401,8 @@ function MainApp({ user, onLogout }) {
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h3 className="font-bold mb-4">Postulaciones hoy</h3>
             <textarea
-              value={applicationCount[currentDay] || ''}
-              onChange={(e) => setApplicationCount(prev => ({...prev, [currentDay]: e.target.value}))}
+              value={applicationCount[getWeekDayKey(currentDay, 'apps')] || ''}
+              onChange={(e) => setApplicationCount(prev => ({...prev, [getWeekDayKey(currentDay, 'apps')]: e.target.value}))}
               className="w-full p-3 border-2 rounded-lg focus:border-blue-500 focus:outline-none"
               rows="3"
               placeholder="Ej: Product Manager - Empresa ABC&#10;Senior Analyst - Empresa XYZ"
@@ -1397,8 +1417,8 @@ function MainApp({ user, onLogout }) {
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <h3 className="font-bold mb-4">Contactos hoy</h3>
             <textarea
-              value={contacts[currentDay] || ''}
-              onChange={(e) => setContacts(prev => ({...prev, [currentDay]: e.target.value}))}
+              value={contacts[getWeekDayKey(currentDay, 'contacts')] || ''}
+              onChange={(e) => setContacts(prev => ({...prev, [getWeekDayKey(currentDay, 'contacts')]: e.target.value}))}
               className="w-full p-3 border-2 rounded-lg focus:border-purple-500 focus:outline-none"
               rows="3"
               placeholder="Ej: María López - LinkedIn&#10;Juan Pérez - Email"
@@ -1431,9 +1451,9 @@ function MainApp({ user, onLogout }) {
               rows="3"
               onBlur={(e) => parseCalendarEvents(e.target.value)}
             />
-            {calendarEvents[currentDay] && calendarEvents[currentDay].length > 0 && (
+            {calendarEvents[getWeekDayKey(currentDay, 'calendar')] || [] && calendarEvents[getWeekDayKey(currentDay, 'calendar')] || [].length > 0 && (
               <div className="bg-white p-3 rounded-lg">
-                <p className="text-sm font-semibold mb-2">✅ {calendarEvents[currentDay].length} eventos sincronizados</p>
+                <p className="text-sm font-semibold mb-2">✅ {calendarEvents[getWeekDayKey(currentDay, 'calendar')] || [].length} eventos sincronizados</p>
               </div>
             )}
           </div>
