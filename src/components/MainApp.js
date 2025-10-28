@@ -62,7 +62,7 @@ im
       console.log('Ajustes realizados:', adjustments);
     }
   };
-port React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, Sparkles, LogOut, X, AlertCircle } from 'lucide-react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
