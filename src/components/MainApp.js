@@ -1,9 +1,8 @@
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
-import { LogOut } from "lucide-react";
-
 import React, { useState, useEffect } from 'react';
-import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, Sparkles } from 'lucide-react';
+import { Check, Calendar, Send, Users, BookOpen, ChevronDown, ChevronUp, Clock, Sparkles, LogOut, X, AlertCircle } from 'lucide-react';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
+
 
 function MainApp({ user, onLogout }) {
   // Función para cargar datos desde localStorage
@@ -34,49 +33,256 @@ function MainApp({ user, onLogout }) {
   const [showCalendarSync, setShowCalendarSync] = useState(true);
   const [expandedTaskControls, setExpandedTaskControls] = useState({});
   const [showAllData, setShowAllData] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('Sincronizado');
+  const [dataLoaded, setDataLoaded] = useState(false);
+  const [scheduleAdjustments, setScheduleAdjustments] = useState([]);
+
+
+  
+  // Sistema de keys únicas por semana
+  const getWeekDayKey = (day, dataKey) => {
+    return `week${currentWeek}-${day}-${dataKey}`;
+  };
 
   const days = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
-  // Guardar datos en localStorage cuando cambien
-  useEffect(() => {
-    localStorage.setItem('meta_human_currentDay', JSON.stringify(currentDay));
-  }, [currentDay]);
 
+  // Cargar datos desde Firebase al iniciar
   useEffect(() => {
-    localStorage.setItem('meta_human_completedTasks', JSON.stringify(completedTasks));
-  }, [completedTasks]);
+    if (!user) return;
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_dailyReflections', JSON.stringify(dailyReflections));
-  }, [dailyReflections]);
+    const loadData = async () => {
+      try {
+        setSyncStatus('Cargando...');
+        const docRef = doc(db, 'users', user.uid);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          const userData = docSnap.data();
+          setCurrentDay(userData.currentDay || 'lunes');
+          setCompletedTasks(userData.completedTasks || {});
+          setDailyReflections(userData.dailyReflections || {});
+          setApplicationCount(userData.applicationCount || {});
+          setContacts(userData.contacts || {});
+          setCurrentWeek(userData.currentWeek || 1);
+          setCalendarEvents(userData.calendarEvents || {});
+          setTaskAdjustments(userData.taskAdjustments || {});
+          setSkippedTasks(userData.skippedTasks || {});
+          setMovedTasks(userData.movedTasks || {});
+        }
+        setDataLoaded(true);
+        setSyncStatus('Sincronizado ✓');
+      } catch (error) {
+        console.error('Error cargando datos:', error);
+        setSyncStatus('Error al cargar');
+      }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_applicationCount', JSON.stringify(applicationCount));
-  }, [applicationCount]);
+    loadData();
+  }, [user]);
 
+  // Guardar datos en Firebase cuando cambien
   useEffect(() => {
-    localStorage.setItem('meta_human_contacts', JSON.stringify(contacts));
-  }, [contacts]);
+    if (!user || !dataLoaded) return;
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_currentWeek', JSON.stringify(currentWeek));
-  }, [currentWeek]);
+    const saveData = async () => {
+      try {
+        setSyncStatus('Guardando...');
+        const docRef = doc(db, 'users', user.uid);
+        await setDoc(docRef, {
+          currentDay,
+          completedTasks,
+          dailyReflections,
+          applicationCount,
+          contacts,
+          currentWeek,
+          calendarEvents,
+          taskAdjustments,
+          skippedTasks,
+          movedTasks,
+          lastUpdated: new Date().toISOString()
+        });
+        setSyncStatus('Sincronizado ✓');
+      } catch (error) {
+        console.error('Error guardando datos:', error);
+        setSyncStatus('Error al guardar');
+      }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_calendarEvents', JSON.stringify(calendarEvents));
-  }, [calendarEvents]);
+    const timeoutId = setTimeout(saveData, 1000);
+  
+  // NUEVAS FUNCIONES AGREGADAS
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_taskAdjustments', JSON.stringify(taskAdjustments));
-  }, [taskAdjustments]);
+  // Eliminar evento del calendario
+  const removeCalendarEvent = (eventIndex) => {
+    const calKey = getWeekDayKey(currentDay, 'calendar');
+    const events = calendarEvents[calKey] || [];
+    const newEvents = events.filter((_, i) => i !== eventIndex);
+    setCalendarEvents(prev => ({ ...prev, [calKey]: newEvents }));
+  };
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_skippedTasks', JSON.stringify(skippedTasks));
-  }, [skippedTasks]);
+  // Ajuste uniforme de duración (30 minutos)
+  const adjustTaskDurationUniform = (taskIndex, increase) => {
+    const task = schedule[currentDay][taskIndex];
+    const adjustKey = getWeekDayKey(currentDay, `adjust-${taskIndex}`);
+    const currentAdjustment = taskAdjustments[adjustKey];
+    const timeToUse = currentAdjustment?.newTime || task.time;
+    
+    const timeMatch = timeToUse.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+    if (timeMatch) {
+      const startHour = parseInt(timeMatch[1]);
+      const startMin = parseInt(timeMatch[2]);
+      const endHour = parseInt(timeMatch[3]);
+      const endMin = parseInt(timeMatch[4]);
+      
+      const currentDuration = (endHour - startHour) * 60 + (endMin - startMin);
+      let newDuration;
+      
+      if (increase) {
+        newDuration = Math.min(240, currentDuration + 30); // Máximo 4 horas
+      } else {
+        newDuration = Math.max(30, currentDuration - 30); // Mínimo 30 min
+      }
+      
+      const newEndTotalMinutes = startHour * 60 + startMin + newDuration;
+      const newEndHour = Math.floor(newEndTotalMinutes / 60);
+      const newEndMin = newEndTotalMinutes % 60;
+      
+      const newTime = `${startHour}:${String(startMin).padStart(2,'0')}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
+      
+      setTaskAdjustments(prev => ({
+        ...prev,
+        [adjustKey]: {
+          originalTime: task.time,
+          newTime: newTime,
+          adjusted: true
+        }
+      }));
+    }
+  };
 
-  useEffect(() => {
-    localStorage.setItem('meta_human_movedTasks', JSON.stringify(movedTasks));
-  }, [movedTasks]);
+  // Cancelar tarea
+  const skipTask = (taskIndex) => {
+    const skipKey = getWeekDayKey(currentDay, `skip-${taskIndex}`);
+    setSkippedTasks(prev => ({ ...prev, [skipKey]: true }));
+  };
+
+  // Restaurar tarea cancelada
+  const unskipTask = (taskIndex) => {
+    const skipKey = getWeekDayKey(currentDay, `skip-${taskIndex}`);
+    setSkippedTasks(prev => {
+      const newSkipped = { ...prev };
+      delete newSkipped[skipKey];
+      return newSkipped;
+    });
+  };
+
+  // Mover tarea al día siguiente
+  const moveTaskToNextDay = (taskIndex) => {
+    const currentDayIndex = days.indexOf(currentDay);
+    const nextDayIndex = (currentDayIndex + 1) % days.length;
+    const nextDay = days[nextDayIndex];
+    
+    const moveKey = getWeekDayKey(currentDay, `move-${taskIndex}`);
+    setMovedTasks(prev => ({
+      ...prev,
+      [moveKey]: {
+        fromDay: currentDay,
+        toDay: nextDay,
+        taskIndex: taskIndex,
+        timestamp: new Date().toISOString()
+      }
+    }));
+  };
+
+  // Devolver tarea movida
+  const returnMovedTask = (taskIndex, fromDay) => {
+    const moveKey = getWeekDayKey(fromDay, `move-${taskIndex}`);
+    setMovedTasks(prev => {
+      const newMoved = { ...prev };
+      delete newMoved[moveKey];
+      return newMoved;
+    });
+  };
+
+  // Ajuste inteligente del schedule por eventos del calendario
+  const adjustScheduleForEvents = (events) => {
+    const adjustments = [];
+    const tasks = schedule[currentDay];
+    
+    events.forEach(event => {
+      const eventStart = event.startHour * 60 + event.startMin;
+      const eventEnd = event.endHour * 60 + event.endMin;
+      
+      tasks.forEach((task, taskIndex) => {
+        const timeMatch = task.time.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+        if (timeMatch) {
+          const taskStart = parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
+          const taskEnd = parseInt(timeMatch[3]) * 60 + parseInt(timeMatch[4]);
+          
+          // Detectar overlap
+          if (taskStart < eventEnd && taskEnd > eventStart) {
+            adjustments.push({
+              taskIndex,
+              taskName: task.task,
+              reason: `Conflicto con evento: ${event.title}`,
+              action: 'Tarea acortada automáticamente'
+            });
+            
+            // Acortar tarea automáticamente
+            const adjustKey = getWeekDayKey(currentDay, `adjust-${taskIndex}`);
+            const newEndHour = Math.floor(eventStart / 60);
+            const newEndMin = eventStart % 60;
+            const newTime = `${timeMatch[1]}:${timeMatch[2]}-${newEndHour}:${String(newEndMin).padStart(2,'0')}`;
+            
+            setTaskAdjustments(prev => ({
+              ...prev,
+              [adjustKey]: {
+                originalTime: task.time,
+                newTime: newTime,
+                adjusted: true,
+                autoAdjusted: true
+              }
+            }));
+          }
+        }
+      });
+    });
+    
+    setScheduleAdjustments(adjustments);
+    return adjustments;
+  };
+
+  // Agregar función de parsing de calendario mejorada
+  const parseCalendarEnhanced = () => {
+    if (!calText.trim()) return;
+    const lines = calText.trim().split('\n');
+    const events = [];
+    lines.forEach(line => {
+      const match = line.match(/(.+?)\s+(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})/i);
+      if (match) {
+        events.push({
+          title: match[1].trim(),
+          startHour: parseInt(match[2]),
+          startMin: parseInt(match[3]),
+          endHour: parseInt(match[4]),
+          endMin: parseInt(match[5])
+        });
+      }
+    });
+    
+    const calKey = getWeekDayKey(currentDay, 'calendar');
+    setCalendarEvents(prev => ({ ...prev, [calKey]: events }));
+    
+    // Ajustar schedule automáticamente
+    const adjustments = adjustScheduleForEvents(events);
+    
+    setCalText('');
+  };
+
+  return () => clearTimeout(timeoutId);
+  }, [user, dataLoaded, currentDay, completedTasks, dailyReflections, applicationCount, contacts, currentWeek, calendarEvents, taskAdjustments, skippedTasks, movedTasks]);
+
 
   // 84 PREGUNTAS FILOSÓFICAS COMPLETAS (12 SEMANAS × 7 DÍAS)
   const reflectionPrompts = {
