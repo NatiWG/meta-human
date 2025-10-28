@@ -761,12 +761,18 @@ function MainApp({ user, onLogout }) {
         });
       }
     });
-    setCalendarEvents(prev => ({ ...prev, [currentDay]: events }));
+    const key = `${currentWeek}-${currentDay}`;
+    setCalendarEvents(prev => ({ ...prev, [key]: events }));
+    // Ajustar automáticamente las actividades que entran en conflicto
+    if (events.length > 0) {
+      adjustScheduleForEvents(events);
+    }
   };
 
   const hasConflict = (taskTime) => {
     const timeMatch = taskTime.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
-    const dayEvents = calendarEvents[currentDay] || [];
+    const key = `${currentWeek}-${currentDay}`;
+    const dayEvents = calendarEvents[key] || [];
     if (!timeMatch || dayEvents.length === 0) return false;
     
     const taskStart = parseInt(timeMatch[1]) * 60 + parseInt(timeMatch[2]);
@@ -818,9 +824,10 @@ function MainApp({ user, onLogout }) {
   };
 
   const undoReduction = (taskIndex) => {
+    const key = `week${currentWeek}-${currentDay}-adjust-${taskIndex}`;
     setTaskAdjustments(prev => {
       const newAdjustments = { ...prev };
-      delete newAdjustments[`${currentDay}-${taskIndex}`];
+      delete newAdjustments[key];
       return newAdjustments;
     });
   };
@@ -893,7 +900,8 @@ function MainApp({ user, onLogout }) {
   };
 
   const getAdjustedSchedule = () => {
-    const dayEvents = calendarEvents[currentDay] || [];
+    const key = `${currentWeek}-${currentDay}`;
+    const dayEvents = calendarEvents[key] || [];
     const dayMovedTasks = movedTasks[currentDay] || [];
     
     const adjusted = [];
@@ -1370,11 +1378,14 @@ function MainApp({ user, onLogout }) {
               rows="3"
               onBlur={(e) => parseCalendarEvents(e.target.value)}
             />
-            {calendarEvents[currentDay] && calendarEvents[currentDay].length > 0 && (
-              <div className="bg-white p-3 rounded-lg">
-                <p className="text-sm font-semibold mb-2">✅ {calendarEvents[currentDay].length} eventos sincronizados</p>
-              </div>
-            )}
+            {(() => {
+              const key = `${currentWeek}-${currentDay}`;
+              return calendarEvents[key] && calendarEvents[key].length > 0 && (
+                <div className="bg-white p-3 rounded-lg">
+                  <p className="text-sm font-semibold mb-2">✅ {calendarEvents[key].length} eventos sincronizados</p>
+                </div>
+              );
+            })()}
           </div>
         )}
 
