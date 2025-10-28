@@ -78,12 +78,15 @@ function MainApp({ user, onLogout }) {
     return () => clearTimeout(timer);
   }, [user, dataLoaded, currentDay, completedTasks, dailyReflections, applicationCount, contacts, currentWeek, calendarEvents, taskAdjustments, skippedTasks, movedTasks]);
 
-  const removeCalendarEvent = (eventIndex) => {
+  const removeCalendarEvent = (calendarEventIndex) => {
+    const key = `${currentWeek}-${currentDay}`;
     setCalendarEvents(prev => {
-      const key = `${currentWeek}-${currentDay}`;
       const events = prev[key] || [];
       const newEvents = { ...prev };
-      newEvents[key] = events.filter((_, i) => i !== eventIndex);
+      newEvents[key] = events.filter((_, i) => i !== calendarEventIndex);
+      if (newEvents[key].length === 0) {
+        delete newEvents[key];
+      }
       return newEvents;
     });
   };
@@ -123,6 +126,50 @@ function MainApp({ user, onLogout }) {
           }
         }
       });
+    });
+  };
+
+  const adjustTaskDuration = (taskIndex, increase) => {
+    const task = schedule[currentDay][taskIndex];
+    const key = `week${currentWeek}-${currentDay}-adjust-${taskIndex}`;
+    const currentAdjustment = taskAdjustments[key];
+    const timeToUse = currentAdjustment?.newTime || task.time;
+    
+    const match = timeToUse.match(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/);
+    if (!match) return;
+    
+    const startHour = parseInt(match[1]);
+    const startMin = parseInt(match[2]);
+    const endHour = parseInt(match[3]);
+    const endMin = parseInt(match[4]);
+    
+    const currentDuration = (endHour * 60 + endMin) - (startHour * 60 + startMin);
+    const newDuration = increase 
+      ? Math.min(240, currentDuration + 30) 
+      : Math.max(30, currentDuration - 30);
+    
+    const newEndTotalMinutes = (startHour * 60 + startMin) + newDuration;
+    const newEndHour = Math.floor(newEndTotalMinutes / 60);
+    const newEndMin = newEndTotalMinutes % 60;
+    
+    const newTime = `${startHour}:${String(startMin).padStart(2, '0')}-${newEndHour}:${String(newEndMin).padStart(2, '0')}`;
+    
+    setTaskAdjustments(prev => ({
+      ...prev,
+      [key]: {
+        originalTime: task.time,
+        newTime: newTime,
+        adjusted: true
+      }
+    }));
+  };
+
+  const undoTaskAdjustment = (taskIndex) => {
+    const key = `week${currentWeek}-${currentDay}-adjust-${taskIndex}`;
+    setTaskAdjustments(prev => {
+      const newAdjustments = { ...prev };
+      delete newAdjustments[key];
+      return newAdjustments;
     });
   };
 
@@ -851,12 +898,13 @@ function MainApp({ user, onLogout }) {
     
     const adjusted = [];
     
-    dayEvents.forEach(event => {
+    dayEvents.forEach((event, eventIdx) => {
       adjusted.push({
         time: `${event.startHour}:${String(event.startMin).padStart(2,'0')}-${event.endHour}:${String(event.endMin).padStart(2,'0')}`,
         task: event.title,
         category: 'calendario',
-        isCalendarEvent: true
+        isCalendarEvent: true,
+        calendarEventIndex: eventIdx
       });
     });
     
@@ -884,8 +932,9 @@ function MainApp({ user, onLogout }) {
       let taskTime = task.time;
       let isManuallyReduced = false;
       
-      if (taskAdjustments[`${currentDay}-${idx}`]) {
-        taskTime = taskAdjustments[`${currentDay}-${idx}`].newTime;
+      const adjustKey = `week${currentWeek}-${currentDay}-adjust-${idx}`;
+      if (taskAdjustments[adjustKey]) {
+        taskTime = taskAdjustments[adjustKey].newTime;
         isManuallyReduced = true;
       }
       
@@ -939,32 +988,73 @@ function MainApp({ user, onLogout }) {
   const exportToExcel = () => {
     let csvContent = "data:text/csv;charset=utf-8,";
     
+    // POSTULACIONES
     csvContent += "POSTULACIONES\n";
-    csvContent += "Día,Postulaciones\n";
-    Object.entries(applicationCount).forEach(([day, apps]) => {
+    csvContent += "Semana,Día,Postulación\n";
+    
+    // Recopilar todas las postulaciones organizadas por semana y día
+    const appsByWeekDay = {};
+    Object.entries(applicationCount).forEach(([key, apps]) => {
       if (apps && apps.trim()) {
         const appsList = apps.split('\n').filter(l => l.trim());
         appsList.forEach(app => {
-          csvContent += `${day},"${app}"\n`;
+          // Si la key contiene "week", extraer semana y día
+          if (key.includes('-')) {
+            const parts = key.split('-');
+            const week = parts[0].replace('week', '');
+            const day = parts.slice(1).join('-');
+            csvContent += `Semana ${week},${day},"${app}"\n`;
+          } else {
+            // Si no tiene semana, es del formato antiguo
+            csvContent += `Semana ${currentWeek},${key},"${app}"\n`;
+          }
         });
       }
     });
     
+    // CONTACTOS
     csvContent += "\n\nCONTACTOS\n";
-    csvContent += "Día,Contactos\n";
-    Object.entries(contacts).forEach(([day, conts]) => {
+    csvContent += "Semana,Día,Contacto\n";
+    
+    Object.entries(contacts).forEach(([key, conts]) => {
       if (conts && conts.trim()) {
         const contsList = conts.split('\n').filter(l => l.trim());
         contsList.forEach(cont => {
-          csvContent += `${day},"${cont}"\n`;
+          // Si la key contiene "week", extraer semana y día
+          if (key.includes('-')) {
+            const parts = key.split('-');
+            const week = parts[0].replace('week', '');
+            const day = parts.slice(1).join('-');
+            csvContent += `Semana ${week},${day},"${cont}"\n`;
+          } else {
+            // Si no tiene semana, es del formato antiguo
+            csvContent += `Semana ${currentWeek},${key},"${cont}"\n`;
+          }
         });
+      }
+    });
+    
+    // REFLEXIONES
+    csvContent += "\n\nREFLEXIONES FILOSÓFICAS\n";
+    csvContent += "Semana,Día,Reflexión\n";
+    
+    Object.entries(dailyReflections).forEach(([key, reflection]) => {
+      if (reflection && reflection.trim()) {
+        if (key.includes('-')) {
+          const parts = key.split('-');
+          const week = parts[0].replace('week', '');
+          const day = parts.slice(1).join('-');
+          csvContent += `Semana ${week},${day},"${reflection.replace(/"/g, '""')}"\n`;
+        } else {
+          csvContent += `Semana ${currentWeek},${key},"${reflection.replace(/"/g, '""')}"\n`;
+        }
       }
     });
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `meta_human_data_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `meta_human_semana${currentWeek}_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1336,6 +1426,18 @@ function MainApp({ user, onLogout }) {
                       </div>
                       <p className={isCompleted && !item.isCalendarEvent ? 'line-through' : item.isSkipped ? 'line-through opacity-50' : 'font-medium'}>{item.task}</p>
                       
+                      {item.isCalendarEvent && item.calendarEventIndex !== undefined && (
+                        <div className="mt-3 pt-3 border-t border-orange-300">
+                          <p className="text-xs text-orange-800 mb-2 font-semibold">📅 Evento de Google Calendar</p>
+                          <button
+                            onClick={() => removeCalendarEvent(item.calendarEventIndex)}
+                            className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-full font-semibold"
+                          >
+                            🗑️ Eliminar evento
+                          </button>
+                        </div>
+                      )}
+                      
                       {item.isSkipped && item.taskIndex !== undefined && (
                         <div className="mt-3 pt-3 border-t border-gray-300">
                           <p className="text-xs text-gray-600 mb-2">Actividad cancelada para hoy</p>
@@ -1380,22 +1482,28 @@ function MainApp({ user, onLogout }) {
                               {expandedTaskControls[`${currentDay}-${item.taskIndex}`] && (
                                 <div className="flex flex-wrap gap-2">
                                   <button
-                                    onClick={() => reduceTaskDuration(item.taskIndex)}
+                                    onClick={() => adjustTaskDuration(item.taskIndex, false)}
                                     className="text-xs bg-purple-500 hover:bg-purple-600 text-white px-3 py-1 rounded-full font-semibold"
                                   >
-                                    ✂️ Reducir duración
+                                    ➖ Reducir 30min
                                   </button>
                                   <button
-                                    onClick={() => moveTaskToNextDay(item.taskIndex)}
+                                    onClick={() => adjustTaskDuration(item.taskIndex, true)}
                                     className="text-xs bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded-full font-semibold"
                                   >
-                                    ➡️ Mover a mañana
+                                    ➕ Aumentar 30min
                                   </button>
                                   <button
                                     onClick={() => skipTask(item.taskIndex)}
-                                    className="text-xs bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded-full font-semibold"
+                                    className="text-xs bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-full font-semibold"
                                   >
-                                    ❌ No hacer hoy
+                                    ❌ Cancelar hoy
+                                  </button>
+                                  <button
+                                    onClick={() => moveTaskToNextDay(item.taskIndex)}
+                                    className="text-xs bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-full font-semibold"
+                                  >
+                                    ➡️ Mover a mañana
                                   </button>
                                 </div>
                               )}
